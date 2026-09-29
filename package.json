@@ -1,0 +1,1 @@
+{"name":"word-garden","version":"1.0.0","private":true,"engines":{"node":">=22.13.0"},"scripts":{"start":"node server.js","test":"node --test test.js"},"dependencies":{"fast-xml-parser":"^5.0.0"}}

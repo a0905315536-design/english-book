@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: word-garden
+    runtime: node
+    plan: free
+    buildCommand: npm ci && node prepare-dictionary.js
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.1
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: APP_USERNAME
+        value: wordgarden
+      - key: APP_PASSWORD
+        sync: false
+
