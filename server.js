@@ -36,15 +36,34 @@ async function translate(texts) {
 }
 async function translateReading(texts) {
  if(settings.deepl)return {values:await translate(texts),provider:'DeepL'};
- // Send the title and article in one request. Two simultaneous requests are
- // frequently rate-limited by the public endpoint on shared hosting IPs.
- const marker='WG_TRANSLATION_SPLIT_7F3A9C',joined=texts.join('\n\n'+marker+'\n\n');
- const url='https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q='+encodeURIComponent(joined);
- const d=await (await remote(url,{headers:{'User-Agent':'Mozilla/5.0'}})).json();
- const translated=Array.isArray(d?.[0])?d[0].map(x=>Array.isArray(x)?x[0]||'':'').join('').trim():'';
- const values=translated.split(marker).map(value=>value.trim());
- if(values.length!==texts.length||values.some(value=>!value))throw Error('中文翻譯暫時無法使用，請稍後再試。');
- return {values,provider:'Google 翻譯'};
+ try {
+  // Send the title and article in one request. Two simultaneous requests are
+  // frequently rate-limited by the public endpoint on shared hosting IPs.
+  const marker='WG_TRANSLATION_SPLIT_7F3A9C',joined=texts.join('\n\n'+marker+'\n\n');
+  const url='https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q='+encodeURIComponent(joined);
+  const d=await (await remote(url,{headers:{'User-Agent':'Mozilla/5.0'}})).json();
+  const translated=Array.isArray(d?.[0])?d[0].map(x=>Array.isArray(x)?x[0]||'':'').join('').trim():'';
+  const values=translated.split(marker).map(value=>value.trim());
+  if(values.length!==texts.length||values.some(value=>!value))throw Error('incomplete');
+  return {values,provider:'Google 翻譯'};
+ } catch {
+  const values=[];
+  for(const text of texts){
+   const chunks=[];let rest=text.trim();
+   while(rest.length>450){let end=rest.lastIndexOf(' ',450);if(end<250)end=450;chunks.push(rest.slice(0,end));rest=rest.slice(end).trim();}
+   if(rest)chunks.push(rest);
+   const translated=[];
+   for(const chunk of chunks){
+    const url='https://api.mymemory.translated.net/get?langpair=en%7Czh-TW&q='+encodeURIComponent(chunk);
+    const d=await (await remote(url,{headers:{'User-Agent':'Mozilla/5.0'}})).json();
+    const value=String(d?.responseData?.translatedText||'').trim();
+    if(!value||Number(d?.responseStatus||200)>=400)throw Error('中文翻譯暫時無法使用，請稍後再試。');
+    translated.push(value);
+   }
+   values.push(translated.join(' '));
+  }
+  return {values,provider:'MyMemory 翻譯'};
+ }
 }
 let newsPending;
 async function news() {
