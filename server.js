@@ -21,8 +21,8 @@ async function loadCloud(){if(!cloudMode)return;const r=await fetch(supabaseUrl+
 async function write(name,value) { if(cloudMode){cloudStore[name]=structuredClone(value);const snapshot=structuredClone(cloudStore);persistChain=persistChain.then(()=>persistCloud(snapshot));return persistChain;}const p=path.join(dir,name+'.json'); fs.writeFileSync(p+'.tmp',JSON.stringify(value,null,2));fs.renameSync(p+'.tmp',p); }
 async function commit(next){await write('words',next);state=next;}
 const dbPath=[path.join(root,'ecdict.sqlite'),path.join(root,'../ecdict.sqlite')].find(fs.existsSync);
-let lookup;
-if(dbPath) {const db=new DatabaseSync(dbPath,{readOnly:true});lookup=db.prepare('SELECT word,phonetic,translation,definition FROM entries WHERE lookup = ?');}
+let lookup,dictionaryDb;
+if(dbPath) {dictionaryDb=new DatabaseSync(dbPath,{readOnly:true});lookup=dictionaryDb.prepare('SELECT word,phonetic,translation,definition FROM entries WHERE lookup = ?');}
 const openccPath=[path.join(root,'opencc.js'),path.join(root,'../opencc.js')].find(fs.existsSync);
 if(!openccPath)throw Error('找不到繁體中文轉換資料。');
 const traditional=require(openccPath).Converter({from:'cn',to:'twp'});
