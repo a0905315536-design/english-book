@@ -7,8 +7,9 @@ function listen(server){return new Promise((resolve,reject)=>{server.once('error
 function stopped(child){return new Promise(resolve=>{child.once('exit',resolve);child.kill();setTimeout(()=>child.kill('SIGKILL'),2000).unref();});}
 
 (async()=>{
- let saved={};
+ let saved={},authorizationHeader;
  const database=http.createServer(async(req,res)=>{
+  authorizationHeader=req.headers.authorization;
   let raw='';for await(const chunk of req)raw+=chunk;
   res.setHeader('Content-Type','application/json');
   if(req.method==='GET')return res.end(saved.value?JSON.stringify([{value:saved.value}]):'[]');
@@ -16,7 +17,7 @@ function stopped(child){return new Promise(resolve=>{child.once('exit',resolve);
   res.statusCode=404;res.end('{}');
  });
  const dbPort=await listen(database),appPort=41000+Math.floor(Math.random()*1000);
- const child=spawn(process.execPath,['server.js'],{cwd:__dirname,env:{...process.env,SUPABASE_URL:`http://127.0.0.1:${dbPort}`,SUPABASE_SERVICE_ROLE_KEY:'test-key',APP_USERNAME:'learner',APP_PASSWORD:'test-password',PORT:String(appPort)},stdio:['ignore','pipe','pipe']});
+ const child=spawn(process.execPath,['server.js'],{cwd:__dirname,env:{...process.env,SUPABASE_URL:`http://127.0.0.1:${dbPort}`,SUPABASE_SERVICE_ROLE_KEY:'sb_secret_test-key',APP_USERNAME:'learner',APP_PASSWORD:'test-password',PORT:String(appPort)},stdio:['ignore','pipe','pipe']});
  try{
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('server timeout')),10000);child.stdout.on('data',chunk=>{if(String(chunk).includes('listening')){clearTimeout(timer);resolve();}});child.once('exit',code=>reject(Error('server exited early: '+code)));});
   assert.equal((await fetch(`http://127.0.0.1:${appPort}/health`)).status,200);
@@ -28,6 +29,7 @@ function stopped(child){return new Promise(resolve=>{child.once('exit',resolve);
   const response=await fetch(`http://127.0.0.1:${appPort}/api/save`,{method:'POST',headers:{Authorization:auth,'x-app-token':token,'content-type':'application/json'},body:JSON.stringify(card)});
   assert.equal(response.status,200);
   assert.equal(saved.value.words.cards[0].word,'cloud');
+  assert.equal(authorizationHeader,undefined);
   const state=await (await fetch(`http://127.0.0.1:${appPort}/api/state`,{headers:{Authorization:auth,'x-app-token':token}})).json();
   assert.equal(state.storage,'cloud');assert.equal(state.cards.length,1);
   console.log('PASS: cloud storage, health check and password protection');
