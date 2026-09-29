@@ -21,8 +21,7 @@ async function loadCloud(){if(!cloudMode)return;const r=await fetch(supabaseUrl+
 async function write(name,value) { if(cloudMode){cloudStore[name]=structuredClone(value);const snapshot=structuredClone(cloudStore);persistChain=persistChain.then(()=>persistCloud(snapshot));return persistChain;}const p=path.join(dir,name+'.json'); fs.writeFileSync(p+'.tmp',JSON.stringify(value,null,2));fs.renameSync(p+'.tmp',p); }
 async function commit(next){await write('words',next);state=next;}
 const dbPath=[path.join(root,'ecdict.sqlite'),path.join(root,'../ecdict.sqlite')].find(fs.existsSync);
-let lookup,dictionaryDb;
-if(dbPath) {dictionaryDb=new DatabaseSync(dbPath,{readOnly:true});lookup=dictionaryDb.prepare('SELECT word,phonetic,translation,definition FROM entries WHERE lookup = ?');}
+function localLookup(word){if(!dbPath)return;const db=new DatabaseSync(dbPath,{readOnly:true});try{return db.prepare('SELECT word,phonetic,translation,definition FROM entries WHERE lookup = ?').get(word);}finally{db.close();}}
 const openccPath=[path.join(root,'opencc.js'),path.join(root,'../opencc.js')].find(fs.existsSync);
 if(!openccPath)throw Error('找不到繁體中文轉換資料。');
 const traditional=require(openccPath).Converter({from:'cn',to:'twp'});
@@ -93,7 +92,7 @@ const server=http.createServer(async(req,res)=>{
     let warning='';if(settings.deepl&&senses.length){try{const ts=await translate(senses.slice(0,40).map(s=>s.meaning));ts.forEach((t,i)=>{senses[i].english=senses[i].meaning;senses[i].meaning=t;});}catch(e){warning=e.message;}}
     return send(200,{word,source:'Merriam-Webster Learner’s Dictionary',sourceUrl:'https://www.merriam-webster.com/dictionary/'+encodeURIComponent(word),phonetic:entries[0]?.hwi?.prs?.[0]?.ipa||'',senses,related:[...new Set(entries.flatMap(e=>e.meta?.stems||[]))].filter(s=>s.toLowerCase()!==word).slice(0,8),warning,translated:!!senses[0]?.english,suggestions:data.filter(x=>typeof x==='string').slice(0,5)});
    }
-   const entry=lookup?.get(word);return send(200,{word,source:'ECDICT 開源字典（非出版社授權字典）',sourceUrl:'https://github.com/skywind3000/ECDICT',phonetic:entry?.phonetic||'',senses:entry?localSenses(traditional(entry.translation||entry.definition||'')):[],related:[],warning:'目前使用開源字典；常用與少見意思可能混列，可到 Cambridge 核對語境。出版社字典可在設定連接。'});
+   const entry=localLookup(word);return send(200,{word,source:'ECDICT 開源字典（非出版社授權字典）',sourceUrl:'https://github.com/skywind3000/ECDICT',phonetic:entry?.phonetic||'',senses:entry?localSenses(traditional(entry.translation||entry.definition||'')):[],related:[],warning:'目前使用開源字典；常用與少見意思可能混列，可到 Cambridge 核對語境。出版社字典可在設定連接。'});
   }
   if(u.pathname==='/api/save'&&req.method==='POST'){
    const word=normalWord(body.word),meaning=String(body.meaning||'').trim();
