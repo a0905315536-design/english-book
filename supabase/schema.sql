@@ -6,4 +6,5 @@ create table if not exists public.word_garden_store (
 
 alter table public.word_garden_store enable row level security;
 revoke all on table public.word_garden_store from anon, authenticated;
+grant all on table public.word_garden_store to service_role;
 
