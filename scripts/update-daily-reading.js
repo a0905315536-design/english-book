@@ -22,7 +22,7 @@ async function bing(texts){
  const xml=await (await checked('https://www.nasa.gov/feed/')).text(),parsed=new XMLParser({ignoreAttributes:false,processEntities:true}).parse(xml),items=[parsed?.rss?.channel?.item||[]].flat();
  const eligible=items.filter(i=>{try{return new URL(i.link).hostname.endsWith('.nasa.gov')&&clean(i.description).length>100&&!/APOD:|image of the day/i.test(i.title);}catch{return false;}}).sort((a,b)=>Date.parse(b.pubDate)-Date.parse(a.pubDate));
  const item=eligible[0];if(!item)throw Error('NASA feed has no suitable article');const title=clean(item.title),text=clean(item.description);
- let translated,provider;try{translated=await google([title,text]);provider='Google 翻譯';}catch{translated=await bing([title,text]);provider='Microsoft Bing 翻譯';}
+ let translated=['',''],provider='';try{translated=await google([title,text]);provider='Google 翻譯';}catch{try{translated=await bing([title,text]);provider='Microsoft Bing 翻譯';}catch{console.warn('Translation providers were unavailable; the app will translate in the reader browser.');}}
  const article={day:day(),title,url:item.link,published:item.pubDate,text,source:'NASA 官方 RSS 摘要',notice:'這是來源提供的摘要，不是完整文章。',zhTitle:translated[0],zh:translated[1],translationProvider:provider};
- fs.writeFileSync(path.join(__dirname,'..','daily-reading.json'),JSON.stringify(article,null,2)+'\n');console.log('Prepared daily reading for '+article.day+' with '+provider);
+ fs.writeFileSync(path.join(__dirname,'..','daily-reading.json'),JSON.stringify(article,null,2)+'\n');console.log('Prepared daily reading for '+article.day+(provider?' with '+provider:'; browser translation will be used'));
 })().catch(error=>{console.error(error);process.exit(1);});
