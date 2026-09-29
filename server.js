@@ -83,7 +83,13 @@ async function translateReading(texts) {
 }
 let newsPending;
 async function news() {
- const cache=read('news',null); if(cache?.day===day()) return {...cache,text:clean(cache.text)};
+ const cache=read('news',null);
+ if(cache?.day===day()&&cache.zh) return {...cache,text:clean(cache.text)};
+ try {
+  const prepared=await (await remote('https://raw.githubusercontent.com/a0905315536-design/english-book/main/daily-reading.json?day='+day())).json();
+  if(prepared?.day===day()&&typeof prepared.title==='string'&&typeof prepared.text==='string'&&typeof prepared.zh==='string'&&prepared.zh){await write('news',prepared);return {...prepared,text:clean(prepared.text)};}
+ } catch {}
+ if(cache?.day===day()) return {...cache,text:clean(cache.text)};
  if(newsPending)return newsPending;
  newsPending=(async()=>{
   try {
