@@ -47,6 +47,22 @@ async function translateReading(texts) {
   if(values.length!==texts.length||values.some(value=>!value))throw Error('incomplete');
   return {values,provider:'Google 翻譯'};
  } catch {
+  try {
+   const userAgent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36 Edg/153';
+   const page=await remote('https://www.bing.com/translator',{headers:{'User-Agent':userAgent}}),html=await page.text();
+   const ig=html.match(/IG:"([^"]+)"/)?.[1],iid=html.match(/data-iid="([^"]+)"/)?.[1];
+   const match=html.match(/params_AbusePreventionHelper\s?=\s?([^\]]+\])/),params=match&&JSON.parse(match[1]);
+   if(!ig||!iid||!Array.isArray(params))throw Error('Bing translation credentials unavailable');
+   const values=[];
+   for(let i=0;i<texts.length;i++){
+    const body=new URLSearchParams({fromLang:'en',to:'zh-Hant',text:texts[i],token:String(params[1]),key:String(params[0]),tryFetchingGenderDebiasedTranslations:'true'});
+    const url='https://www.bing.com/ttranslatev3?isVertical=1&&IG='+encodeURIComponent(ig)+'&IID='+encodeURIComponent(iid)+'&SFX='+(i+1)+'&ref=TThis&edgepdftranslator=1';
+    const r=await remote(url,{method:'POST',headers:{'User-Agent':userAgent,Referer:'https://www.bing.com/translator','Content-Type':'application/x-www-form-urlencoded'},body});
+    const d=await r.json(),value=String(d?.[0]?.translations?.[0]?.text||'').trim();
+    if(!value)throw Error('Bing translation incomplete');values.push(value);
+   }
+   return {values,provider:'Microsoft Bing 翻譯'};
+  } catch {}
   const values=[];
   for(const text of texts){
    const chunks=[];let rest=text.trim();
