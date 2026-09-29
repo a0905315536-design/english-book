@@ -36,11 +36,14 @@ async function translate(texts) {
 }
 async function translateReading(texts) {
  if(settings.deepl)return {values:await translate(texts),provider:'DeepL'};
- const values=await Promise.all(texts.map(async text=>{
-  const url='https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q='+encodeURIComponent(text);
-  const d=await (await remote(url)).json(),value=Array.isArray(d?.[0])?d[0].map(x=>Array.isArray(x)?x[0]||'':'').join('').trim():'';
-  if(!value)throw Error('中文翻譯暫時無法使用，請稍後再試。');return value;
- }));
+ // Send the title and article in one request. Two simultaneous requests are
+ // frequently rate-limited by the public endpoint on shared hosting IPs.
+ const marker='WG_TRANSLATION_SPLIT_7F3A9C',joined=texts.join('\n\n'+marker+'\n\n');
+ const url='https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q='+encodeURIComponent(joined);
+ const d=await (await remote(url,{headers:{'User-Agent':'Mozilla/5.0'}})).json();
+ const translated=Array.isArray(d?.[0])?d[0].map(x=>Array.isArray(x)?x[0]||'':'').join('').trim():'';
+ const values=translated.split(marker).map(value=>value.trim());
+ if(values.length!==texts.length||values.some(value=>!value))throw Error('中文翻譯暫時無法使用，請稍後再試。');
  return {values,provider:'Google 翻譯'};
 }
 let newsPending;
