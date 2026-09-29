@@ -21,12 +21,14 @@ function stopped(child){return new Promise(resolve=>{child.once('exit',resolve);
  try{
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('server timeout')),10000);child.stdout.on('data',chunk=>{if(String(chunk).includes('listening')){clearTimeout(timer);resolve();}});child.once('exit',code=>reject(Error('server exited early: '+code)));});
   assert.equal((await fetch(`http://127.0.0.1:${appPort}/health`)).status,200);
-  assert.equal((await fetch(`http://127.0.0.1:${appPort}/app/`)).status,401);
+  const redirect=await fetch(`http://127.0.0.1:${appPort}/app/`,{redirect:'manual'});assert.equal(redirect.status,303);assert.equal(redirect.headers.get('location'),'/login');
+  const signedIn=await fetch(`http://127.0.0.1:${appPort}/login`,{method:'POST',redirect:'manual',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'learner',password:'test-password'})});
+  assert.equal(signedIn.status,303);const cookie=signedIn.headers.get('set-cookie').split(';')[0];
   const auth='Basic '+Buffer.from('learner:test-password').toString('base64');
-  const html=await (await fetch(`http://127.0.0.1:${appPort}/app/`,{headers:{Authorization:auth}})).text();
+  const html=await (await fetch(`http://127.0.0.1:${appPort}/app/`,{headers:{Cookie:cookie}})).text();
   const token=html.match(/name="app-token" content="([^"]+)"/)[1];
   const card={word:'cloud',meaning:'雲端',primaryMeaning:'雲端',example:'',note:'',source:'test',sourceUrl:'',dictionaryNotes:'',phonetic:''};
-  const response=await fetch(`http://127.0.0.1:${appPort}/api/save`,{method:'POST',headers:{Authorization:auth,'x-app-token':token,'content-type':'application/json'},body:JSON.stringify(card)});
+  const response=await fetch(`http://127.0.0.1:${appPort}/api/save`,{method:'POST',headers:{Cookie:cookie,'x-app-token':token,'content-type':'application/json'},body:JSON.stringify(card)});
   assert.equal(response.status,200);
   assert.equal(saved.value.words.cards[0].word,'cloud');
   assert.equal(authorizationHeader,undefined);
