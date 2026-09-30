@@ -117,7 +117,7 @@ async function news(settings,accountId) {
  })();newsPending.set(accountId,pending);try{return await pending;}finally{newsPending.delete(accountId);}
 }
 const publicFiles={'/':'index.html','/app/':'index.html','/app.js':'app.js','/style.css':'style.css','/review.js':'review.js'};
-const publicAssets={'/assets/phosphor.css':['assets/phosphor.css','text/css; charset=utf-8'],'/assets/Phosphor.woff2':['assets/Phosphor.woff2','font/woff2'],'/assets/curious-notebook-hero.png':['assets/curious-notebook-hero.png','image/png'],'/assets/notebook-earth-reading.webp':['assets/notebook-earth-reading.webp','image/webp']};
+const publicAssets={'/assets/phosphor.css':['assets/phosphor.css','text/css; charset=utf-8'],'/assets/Phosphor.woff2':['assets/Phosphor.woff2','font/woff2'],'/assets/curious-notebook-hero.png':['assets/curious-notebook-hero.png','image/png'],'/assets/notebook-earth-reading.webp':['assets/notebook-earth-reading.webp','image/webp'],'/assets/notebook-leaves.png':['assets/notebook-leaves.png','image/png'],'/assets/notebook-moon-reading.png':['assets/notebook-moon-reading.png','image/png']};
 const appUsername=String(process.env.APP_USERNAME||'wordgarden'),appPassword=String(process.env.APP_PASSWORD||'');
 function safeEqual(a,b){const supplied=Buffer.from(String(a)),expected=Buffer.from(String(b));return supplied.length===expected.length&&crypto.timingSafeEqual(supplied,expected);}
 const sessionSecret=String(process.env.SESSION_SECRET||supabaseKey||appPassword||token);

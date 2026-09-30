@@ -30,7 +30,7 @@ function weekStats(){
  return state.history.filter(h=>h.at>=monday.getTime()).length;
 }
 function renderCalendar(){
- const current=today(),[currentYear,currentMonth]=current.split('-').map(Number),view=new Date(Date.UTC(currentYear,currentMonth-1+calendarMonthOffset,1)),year=view.getUTCFullYear(),month=view.getUTCMonth(),leading=(view.getUTCDay()+6)%7,start=new Date(Date.UTC(year,month,-leading+1)),learned=new Set(state.history.map(h=>h.day||dayKey(new Date(h.at)))),cells=[];
+ const current=today(),[currentYear,currentMonth]=current.split('-').map(Number),view=new Date(Date.UTC(currentYear,currentMonth-1+calendarMonthOffset,1)),year=view.getUTCFullYear(),month=view.getUTCMonth(),leading=view.getUTCDay(),start=new Date(Date.UTC(year,month,1-leading)),learned=new Set(state.history.map(h=>h.day||dayKey(new Date(h.at)))),cells=[];
  $('#calendar-month').textContent=`${year} 年 ${month+1} 月`;$('#learning-calendar').setAttribute('aria-label',`${year} 年 ${month+1} 月學習紀錄`);
  for(let index=0;index<42;index++){const d=new Date(start);d.setUTCDate(start.getUTCDate()+index);const key=d.toISOString().slice(0,10),inMonth=d.getUTCMonth()===month,isToday=key===current,done=learned.has(key);cells.push(`<div class="calendar-day${inMonth?'':' outside'}${isToday?' today':''}${done?' practiced':''}" aria-label="${key}${done?'，已練習':''}${isToday?'，今天':''}"><span>${d.getUTCDate()}</span>${done?'<i class="ph ph-check" aria-hidden="true"></i>':'<b aria-hidden="true"></b>'}</div>`);}$('#learning-calendar').innerHTML=cells.join('');
  const streak=learningStreak();$('#streak-label').textContent=streak?`連續 ${streak} 天`:'今天開始';
