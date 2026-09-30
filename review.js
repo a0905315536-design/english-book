@@ -21,6 +21,7 @@ function readingParts(text) {
   return String(text||'').split(/([A-Za-z]+(?:['’][A-Za-z]+)*)/).filter(Boolean).map(part=>({text:part,word:/^[A-Za-z]+(?:['’][A-Za-z]+)*$/.test(part)?part.toLowerCase().replace(/’/g,"'"):''}));
 }
 function latestRating(card, history=[]) {
+  if(Number.isInteger(card.lastRating)&&card.lastRating>=0&&card.lastRating<=3&&Number.isFinite(card.lastReview))return card.lastRating;
   const latest=history.filter(h=>h.id===card.id&&Number.isInteger(h.rating)&&h.rating>=0&&h.rating<=3).sort((a,b)=>b.at-a.at)[0];
   return latest?latest.rating:Number.isInteger(card.lastRating)&&card.lastRating>=0&&card.lastRating<=3?card.lastRating:null;
 }

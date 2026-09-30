@@ -31,6 +31,8 @@ function stopped(child){return new Promise(resolve=>{child.once('exit',resolve);
   const response=await fetch(`http://127.0.0.1:${appPort}/api/save`,{method:'POST',headers:{Cookie:cookie,'x-app-token':token,'content-type':'application/json'},body:JSON.stringify(card)});
   assert.equal(response.status,200);
   assert.equal(saved.value.words.cards[0].word,'cloud');
+  const reviewed=await fetch(`http://127.0.0.1:${appPort}/api/review`,{method:'POST',headers:{Cookie:cookie,'x-app-token':token,'content-type':'application/json'},body:JSON.stringify({id:saved.value.words.cards[0].id,rating:1})});
+  assert.equal(reviewed.status,200);const reviewedCard=await reviewed.json();assert.equal(reviewedCard.lastRating,1);assert.equal(saved.value.words.history.at(-1).rating,1);
   assert.equal(authorizationHeader,undefined);
   const state=await (await fetch(`http://127.0.0.1:${appPort}/api/state`,{headers:{Authorization:auth,'x-app-token':token}})).json();
   assert.equal(state.storage,'cloud');assert.equal(state.cards.length,1);

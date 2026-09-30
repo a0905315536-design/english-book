@@ -13,7 +13,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
  const first=await api('save',{word:'bank',meaning:'銀行',example:'I went to the bank.'});assert.equal(first.status,200);
  assert.equal((await api('save',{word:'bank',meaning:'銀行'})).status,400);
  assert.equal((await api('save',{word:' BANK ',meaning:'河岸'})).status,400);
- const reviewed=await api('review',{id:first.data.id,rating:3});assert.ok(reviewed.data.due>Date.now()+6*86400000);
+ const reviewed=await api('review',{id:first.data.id,rating:3});assert.ok(reviewed.data.due>Date.now()+6*86400000);assert.equal(reviewed.data.lastRating,3);assert.ok(Number.isFinite(reviewed.data.lastReview));
  assert.equal((await api('review',{id:first.data.id,rating:3})).status,400);
  assert.equal((await api('import',{version:1,cards:[{word:'broken'}]})).status,400);
  const backup=(await api('state')).data;assert.equal((await api('import',{version:1,cards:backup.cards})).data.added,0);
@@ -29,7 +29,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   const removed=(await api('state')).data;assert.ok(!removed.cards.some(x=>x.id===c.id));assert.ok(removed.trash.some(x=>x.id===c.id));
   assert.equal((await api('restore',{id:c.id})).status,200);
  }
- const all=(await api('state')).data;
+ const all=(await api('state')).data;assert.equal(all.cards.find(c=>c.id===first.data.id).lastRating,3);assert.equal(all.history.filter(h=>h.id===first.data.id).at(-1).rating,3);
  assert.equal((await api('import',{version:1,cards:all.cards,history:all.history})).data.historyAdded,0);
  const old=all.cards.find(c=>c.word==='duty');
  const edit=(await api('save',{...old,meaning:'責任／職務',primaryMeaning:'責任／職務'})).data;assert.equal(edit.reviews,old.reviews);assert.equal(edit.due,old.due);assert.equal(edit.primaryMeaning,'責任／職務');
