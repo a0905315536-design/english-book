@@ -19,8 +19,23 @@ function source(c){return c.sourceUrl?`<a href="${safeLink(c.sourceUrl)}" target
 function due(){return state.cards.filter(c=>c.due<=Date.now()).sort((a,b)=>a.due-b.due);}
 function cardRating(c){return latestRating(c,state.history);}
 function nextDue(){const c=state.cards.filter(c=>c.due>Date.now()).sort((a,b)=>a.due-b.due)[0];return c?'下次到期：'+date(c.due):'新增一個今天遇見的字，就可以開始。';}
+const dayKey=d=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+function learningStreak(){
+ const learned=new Set(state.history.map(h=>h.day||dayKey(new Date(h.at))));if(!learned.size)return 0;
+ let cursor=new Date(today()+'T12:00:00+08:00'),count=0;if(!learned.has(dayKey(cursor)))cursor.setUTCDate(cursor.getUTCDate()-1);
+ while(learned.has(dayKey(cursor))){count++;cursor.setUTCDate(cursor.getUTCDate()-1);}return count;
+}
+function weekStats(){
+ const current=today(),weekday=new Date(current+'T12:00:00+08:00').getUTCDay(),monday=new Date(current+'T00:00:00+08:00');monday.setUTCDate(monday.getUTCDate()-((weekday+6)%7));
+ return state.history.filter(h=>h.at>=monday.getTime()).length;
+}
+function renderRoute(){
+ const learned=new Set(state.history.map(h=>h.day||dayKey(new Date(h.at)))),items=[],base=new Date(today()+'T12:00:00+08:00');
+ for(let offset=4;offset>=0;offset--){const d=new Date(base);d.setUTCDate(base.getUTCDate()-offset);const key=dayKey(d),isToday=offset===0,done=learned.has(key);items.push(`<div class="route-day ${done?'done':''} ${isToday?'today':''}"><span class="route-marker"><i class="ph ${done?'ph-plant':'ph-circle'}"></i></span><b>${isToday?'今天':new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'numeric',day:'numeric'}).format(d)}</b><small>${done?'完成學習':isToday?'等你出發':'休息一天'}</small></div>`);}$('#route-track').innerHTML=items.join('');
+}
 function stats(){
- $('#due-count').textContent=due().length;$('#done-count').textContent=new Set(state.history.filter(h=>h.day===today()).map(h=>h.id)).size;$('#total-count').textContent=state.cards.length;
+ const doneToday=new Set(state.history.filter(h=>(h.day||dayKey(new Date(h.at)))===today()).map(h=>h.id)).size,streak=learningStreak(),weekly=weekStats(),weeklyGoal=50,percent=Math.min(100,Math.round(weekly/weeklyGoal*100));
+ $('#due-count').textContent=due().length;$('#done-count').textContent=doneToday;$('#total-count').textContent=state.cards.length;$('#streak-inline').textContent=streak;$('#weekly-percent').textContent=percent+'%';$('#weekly-count').textContent=`${weekly} / ${weeklyGoal} 張`;$('#weekly-meter').value=Math.min(weekly,weeklyGoal);$('#mastered-count').textContent=state.cards.filter(c=>cardRating(c)===3).length;$('#learning-days').textContent=new Set(state.history.map(h=>h.day||dayKey(new Date(h.at)))).size;renderRoute();
  $('#review-hint').textContent=due().length?`今天有 ${due().length} 個單字待複習，每輪最多 20 張。`:nextDue();
  $('#start-review').textContent=session&&queue.length?'繼續本輪複習 →':due().length?'開始今日複習 →':state.cards.length?'今天已完成 · 看下次安排':'先收集第一個單字 →';$('#practice-review').hidden=!state.cards.length;
 }
@@ -101,13 +116,17 @@ function renderNews(){
  document.querySelectorAll('[data-reading-word]').forEach(b=>b.onclick=()=>lookupReadingWord(b.dataset.readingWord,b));
  $('#toggle-translation').onclick=e=>{if(article.zh){showArticleZh=!showArticleZh;renderNews();return;}run(async()=>{try{article=await api('news/translate',{});}catch{article=await translateReadingInBrowser(article);}showArticleZh=true;renderNews();},e.target,'#news-status');};
 }
+function renderHomeReading(){
+ if(!article)return;const words=String(article.text||'').trim().split(/\s+/).filter(Boolean),minutes=Math.max(1,Math.ceil(words.length/180)),average=words.length?words.reduce((sum,w)=>sum+w.replace(/[^a-z]/gi,'').length,0)/words.length:0,level=average>5.4?'較有挑戰':average>4.7?'中等':'輕鬆';
+ $('#home-reading-title').textContent=article.title;$('#home-reading-zh').textContent=article.zhTitle||'點進文章後可顯示整篇中文翻譯。';$('#reading-minutes').textContent=minutes;$('#reading-level').textContent=level;
+}
 async function translateReadingInBrowser(item){
  const chunks=text=>{const out=[];for(const paragraph of String(text||'').split(/\n{2,}/)){let rest=paragraph.trim();while(rest.length>1800){let end=rest.lastIndexOf(' ',1800);if(end<1100)end=1800;out.push(rest.slice(0,end));rest=rest.slice(end).trim();}if(rest)out.push(rest);}return out;},values=[];
  for(const text of [item.title,item.text]){const translated=[];for(const chunk of chunks(text)){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q='+encodeURIComponent(chunk),{signal:controller.signal});if(!r.ok)throw Error('中文翻譯暫時無法使用，請稍後再試。');const d=await r.json(),value=Array.isArray(d?.[0])?d[0].map(x=>Array.isArray(x)?x[0]||'':'').join('').trim():'';if(!value)throw Error('中文翻譯暫時無法使用，請稍後再試。');translated.push(value);}finally{clearTimeout(timer);}}values.push(translated.join('\n\n'));}
  return {...item,zhTitle:values[0],zh:values[1],translationProvider:'Google 翻譯'};
 }
 let newsLoading=false;
-async function loadNews(){if(newsLoading)return;newsLoading=true;try{article=await api('news');renderNews();}catch(e){$('#news').innerHTML='<p class="notice error">'+esc(e.message)+'</p><button id="retry-news" class="secondary">重新載入</button>';$('#retry-news').onclick=loadNews;}finally{newsLoading=false;}}
+async function loadNews(){if(newsLoading)return;newsLoading=true;try{article=await api('news');renderNews();renderHomeReading();}catch(e){$('#news').innerHTML='<p class="notice error">'+esc(e.message)+'</p><button id="retry-news" class="secondary">重新載入</button>';$('#retry-news').onclick=loadNews;$('#home-reading-title').textContent='今天的文章暫時無法載入';$('#home-reading-zh').textContent='請稍後再試，已收集的單字與複習進度不受影響。';}finally{newsLoading=false;}}
 $('#settings-form').onsubmit=e=>{e.preventDefault();run(async()=>{const b={};if($('#mw-key').value.trim())b.mw=$('#mw-key').value.trim();if($('#deepl-key').value.trim())b.deepl=$('#deepl-key').value.trim();if(!Object.keys(b).length){status('#settings-status','沒有輸入新金鑰，原設定保持不變。');return;}await api('settings',b);$('#settings-form').reset();await refresh();status('#settings-status','設定已保存。請查詢單字或翻譯文章，以確認金鑰有效。');},e.submitter,'#settings-status');};
 $('#disconnect').onclick=e=>run(async()=>{await api('settings',{mw:'',deepl:''});await refresh();status('#settings-status','已移除服務金鑰。');},e.target,'#settings-status');
 $('#export').onclick=e=>run(async()=>{const saved=await api('backup',{});status('#backup-status',saved.cloud?'已準備 '+saved.backup.cards.length+' 個單字與複習紀錄，瀏覽器將下載備份。備份不包含金鑰與回收區。':'已保存 '+saved.backup.cards.length+' 個單字與複習紀錄。備份位置：'+saved.path+'。也已嘗試讓瀏覽器下載一份；若沒有下載，可從上述位置取用。備份不包含金鑰與回收區。');const blob=new Blob([JSON.stringify(saved.backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='拾字備份-'+today()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);},e.target,'#backup-status');
