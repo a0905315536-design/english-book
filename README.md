@@ -4,11 +4,11 @@
 
 ## 線上版
 
-此專案可由 Render 部署，並以 Supabase 保存單字、複習紀錄、設定與每日閱讀。資料不依賴家中電腦，因此電腦關機後仍能使用。網站使用帳號密碼保護，Supabase 的管理金鑰只放在 Render 的私密環境變數，不會送到瀏覽器。
+此專案可由 Render 部署，並以 Supabase 保存單字、複習紀錄、設定與每日閱讀。資料不依賴家中電腦，因此電腦關機後仍能使用。開啟網址即可直接進入共用單字本；Supabase 的管理金鑰只放在 Render 的私密環境變數，不會送到瀏覽器。
 
 1. 在 Supabase SQL Editor 執行 `supabase/schema.sql`。
 2. 在 Render 以本專案的 `render.yaml` 建立 Blueprint。
-3. 設定 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 與 `APP_PASSWORD`；`APP_USERNAME` 預設為 `wordgarden`。
+3. 設定 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY`。
 4. 等待健康檢查 `/health` 通過後開啟 Render 網址。
 
 Render 免費服務閒置後可能需要短時間喚醒。Supabase 免費方案也有其用量與閒置政策，請以兩個服務當下顯示的方案內容為準。
