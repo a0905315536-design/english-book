@@ -10,7 +10,8 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
  assert.equal((await fetch(base+'/api/state')).status,403);
  assert.equal((await fetch(base+'/data/settings.json')).status,404);
  const lookup=await api('lookup?word=helpful');assert.ok(lookup.data.senses.length>0);
- const first=await api('save',{word:'bank',meaning:'銀行',example:'I went to the bank.'});assert.equal(first.status,200);
+ const first=await api('save',{word:'bank',meaning:'銀行',example:'I went to the bank.'});assert.equal(first.status,200);assert.ok(Number.isFinite(Date.parse(first.data.createdAt)));
+ const readingDone=await api('reading/complete',{});assert.equal(readingDone.status,200);assert.ok((await api('state')).data.readingDays.includes(readingDone.data.day));
  assert.equal((await api('save',{word:'bank',meaning:'銀行'})).status,400);
  assert.equal((await api('save',{word:' BANK ',meaning:'河岸'})).status,400);
  const reviewed=await api('review',{id:first.data.id,rating:3});assert.ok(reviewed.data.due>Date.now()+6*86400000);assert.equal(reviewed.data.lastRating,3);assert.ok(Number.isFinite(reviewed.data.lastReview));

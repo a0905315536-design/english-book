@@ -7,6 +7,33 @@ test('reading context preserves abbreviated times and months without matching wo
 test('daily reading separates clickable English words and keeps punctuation',()=>{const {readingParts}=require('./review');const parts=readingParts("NASA's rover can't stop.");assert.deepEqual(parts.filter(p=>p.word).map(p=>p.word),["nasa's",'rover',"can't",'stop']);assert.equal(parts.map(p=>p.text).join(''),"NASA's rover can't stop.");});
 test('category follows the card’s persisted latest formal rating',()=>{const {latestRating}=require('./review');const legacy={id:'a',lastRating:0};assert.equal(latestRating(legacy,[]),0);assert.equal(latestRating(legacy,[{id:'a',rating:0,at:1},{id:'a',rating:3,at:2}]),3);assert.equal(latestRating({id:'a',lastRating:1,lastReview:3},[{id:'a',rating:3,at:2}]),1);assert.equal(latestRating({id:'b'},[]),null);assert.equal(latestRating(legacy,[{id:'other',rating:1,at:3}]),0);});
 const {localSenses,normalWord,importBackup}=require('./model');
+const {dailyPlan}=require('./learning');
+test('daily plan turns review, collection and reading into three concrete tasks',()=>{
+ const now=Date.parse('2026-10-01T04:00:00.000Z');
+ const state={
+  cards:[
+   {id:'due',due:now-1,createdAt:'2026-10-01T01:00:00.000Z'},
+   {id:'later',due:now+86400000,createdAt:'2026-09-30T01:00:00.000Z'}
+  ],
+  history:[{id:'later',at:now-1000,day:'2026-10-01'}],
+  readingDays:[]
+ };
+ const plan=dailyPlan(state,now);
+ assert.equal(plan.review.remaining,1);
+ assert.equal(plan.review.done,1);
+ assert.equal(plan.collect.done,1);
+ assert.equal(plan.reading.complete,false);
+ assert.equal(plan.completed,1);
+ assert.equal(plan.total,3);
+});
+test('daily plan marks all tasks complete after due reviews, one new word and reading',()=>{
+ const now=Date.parse('2026-10-01T04:00:00.000Z');
+ const plan=dailyPlan({cards:[{id:'new',due:now+1,createdAt:'2026-10-01T02:00:00.000Z'}],history:[{id:'old',at:now,day:'2026-10-01'}],readingDays:['2026-10-01']},now);
+ assert.equal(plan.review.complete,true);
+ assert.equal(plan.collect.complete,true);
+ assert.equal(plan.reading.complete,true);
+ assert.equal(plan.completed,3);
+});
 test('old separate senses merge into one word without losing content or history',()=>{const {collapseWords}=require('./model');const a={id:'a',word:'bank',meaning:'銀行',due:100,interval:1,reviews:2,example:'A bank.'};const b={...a,id:'b',meaning:'河岸',due:50,example:'A river bank.'};const old={cards:[a,b],history:[{id:'b',at:1,rating:2}],trash:[]};const next=collapseWords(old);assert.equal(next.cards.length,1);assert.match(next.cards[0].meaning,/銀行\n河岸/);assert.match(next.cards[0].example,/river bank/);assert.equal(next.cards[0].due,50);assert.equal(next.history[0].id,'a');assert.equal(old.cards.length,2);assert.deepEqual(collapseWords(next),next);const merged=importBackup({cards:[a],history:[],trash:[]},{version:1,cards:[b],history:[]});assert.equal(merged.added,0);assert.equal(merged.next.cards.length,1);assert.match(merged.next.cards[0].meaning,/河岸/);assert.deepEqual(importBackup(merged.next,{version:1,cards:[b]}).next,merged.next);});
 test('dictionary choices separate parts and meanings',()=>{assert.deepEqual(localSenses('n. 責任, 關稅, 職務\\n[化] 職責').map(s=>s.meaning),['責任','關稅','職務','職責']);assert.equal(localSenses('vt. 使穿衣, 打扮')[0].part,'及物動詞');});
 test('backup merges history once and strips unknown fields',()=>{const c={id:'old',word:' Duty ',meaning:'責任',due:0,interval:0,reviews:1,admin:true};const body={version:1,cards:[c],history:[{id:'old',rating:2,at:1000,day:'wrong'}]};const first=importBackup({cards:[],history:[],trash:[]},body);assert.equal(first.next.cards[0].word,'duty');assert.equal(first.next.cards[0].admin,undefined);assert.equal(first.historyAdded,1);assert.equal(first.next.history[0].day,'1970-01-01');assert.equal(importBackup(first.next,body).historyAdded,0);assert.equal(normalWord('  FIGURE   OUT  '),'figure out');});

@@ -15,7 +15,7 @@ if(!cloudMode)fs.mkdirSync(dir,{recursive:true});
 const port = Number(process.env.PORT || process.env.WORD_GARDEN_PORT || 8788),bindHost=process.env.HOST|| (cloudMode?'0.0.0.0':'127.0.0.1');
 const token = crypto.randomBytes(24).toString('hex');
 let cloudStore={},persistChain=Promise.resolve();
-const emptyState=()=>({cards:[],history:[],trash:[]});
+const emptyState=()=>({cards:[],history:[],trash:[],readingDays:[]});
 function accountBucket(accountId='main',create=false){
  if(accountId==='main')return cloudStore;
  if(create){cloudStore.users||={};cloudStore.users[accountId]||={};}
@@ -116,8 +116,36 @@ async function news(settings,accountId) {
   }catch(e){if(cache)return {...cache,notice:'更新失敗，顯示上次保存的文章：'+e.message};throw e;}
  })();newsPending.set(accountId,pending);try{return await pending;}finally{newsPending.delete(accountId);}
 }
-const publicFiles={'/':'index.html','/app/':'index.html','/app.js':'app.js','/style.css':'style.css','/review.js':'review.js'};
+const publicFiles={'/':'index.html','/app/':'index.html','/app.js':'app.js','/style.css':'style.css','/review.js':'review.js','/learning.js':'learning.js'};
 const publicAssets={'/assets/phosphor.css':['assets/phosphor.css','text/css; charset=utf-8'],'/assets/Phosphor.woff2':['assets/Phosphor.woff2','font/woff2'],'/assets/curious-notebook-hero.png':['assets/curious-notebook-hero.png','image/png'],'/assets/notebook-earth-reading.webp':['assets/notebook-earth-reading.webp','image/webp'],'/assets/notebook-leaves.png':['assets/notebook-leaves.png','image/png'],'/assets/notebook-moon-reading.png':['assets/notebook-moon-reading.png','image/png']};
+const appUsername=String(process.env.APP_USERNAME||'wordgarden'),appPassword=String(process.env.APP_PASSWORD||'');
+function safeEqual(a,b){const supplied=Buffer.from(String(a)),expected=Buffer.from(String(b));return supplied.length===expected.length&&crypto.timingSafeEqual(supplied,expected);}
+const sessionSecret=String(process.env.SESSION_SECRET||supabaseKey||appPassword||token);
+const normalizeUsername=value=>String(value||'').trim().toLowerCase();
+const normalizeEmail=value=>String(value||'').trim().toLowerCase();
+const escapeHtml=value=>String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function hashSecret(value,salt=crypto.randomBytes(16).toString('hex')){return {salt,hash:crypto.scryptSync(String(value),salt,64).toString('hex')};}
+function verifySecret(value,record){if(!record?.salt||!record?.hash)return false;return safeEqual(crypto.scryptSync(String(value),record.salt,64).toString('hex'),record.hash);}
+function authData(){const value=read('auth',{version:1,users:{}});value.users||={};return value;}
+async function saveAuth(value){await write('auth',value);}
+function sessionValue(account){const signature=crypto.createHmac('sha256',sessionSecret).update('word-garden:'+account.id+':'+account.password.hash).digest('hex');return account.id+'.'+signature;}
+function sessionCookie(account){return 'wg_session='+sessionValue(account)+'; Path=/; HttpOnly;'+(cloudMode?' Secure;':'')+' SameSite=Lax; Max-Age=2592000';}
+function accountFromRequest(req){
+ if(!appPassword&&!cloudMode)return {id:'main',username:appUsername};
+ const auth=authData(),cookie=String(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('wg_session='));
+ if(cookie){const value=decodeURIComponent(cookie.slice(11)),split=value.lastIndexOf('.'),id=value.slice(0,split),account=Object.values(auth.users).find(user=>user.id===id);if(split>0&&account&&safeEqual(value,sessionValue(account)))return account;}
+ const raw=String(req.headers.authorization||'');
+ if(raw.startsWith('Basic ')){try{const decoded=Buffer.from(raw.slice(6),'base64').toString('utf8'),split=decoded.indexOf(':'),account=auth.users[normalizeUsername(decoded.slice(0,split))];if(split>=0&&account&&verifySecret(decoded.slice(split+1),account.password))return account;}catch{}}
+ return null;
+}
+const pageStyle=`*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#fbfaf5;color:#173f36;font:16px/1.6 "Segoe UI","Microsoft JhengHei",sans-serif;display:grid;place-items:center}.auth-shell{width:min(920px,calc(100% - 32px));min-height:610px;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;border:1px solid #d9dfd2;border-radius:12px 42px 12px 12px;background:#fffefa;box-shadow:0 24px 70px #173f3617}.auth-art{position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:40px;background:#f1eee4}.auth-brand{font:700 29px/1.15 Georgia,"Microsoft JhengHei",serif}.auth-brand small{display:block;margin-top:9px;color:#66766f;font:700 9px/1 sans-serif;letter-spacing:1.8px}.auth-art img{width:115%;margin-left:-8%;object-fit:contain}.auth-note{color:#17603f;font:italic 700 14px/1.7 cursive;transform:rotate(-2deg)}.box{align-self:center;padding:46px 52px}.box h1{margin:0 0 8px;font:700 35px/1.3 Georgia,"Microsoft JhengHei",serif}.box p{color:#66766f}label{display:block;margin:16px 0 6px;font-size:13px;font-weight:600}input{width:100%;padding:12px;border:1px solid #bdc7c0;border-radius:10px;background:#fffefa;font:inherit}input:focus{outline:3px solid #f4bd3b;outline-offset:2px;border-color:#17603f}button,.primary{display:block;width:100%;margin-top:22px;padding:12px;border:0;border-radius:10px;background:#17603f;color:#fff;text-align:center;text-decoration:none;font:inherit;font-weight:700}.links{display:flex;justify-content:center;gap:16px;margin-top:20px}.links a{color:#17603f}.message{padding:11px 13px;border-radius:10px;background:#e9f0df;color:#17603f}.error{background:#fff0ed;color:#9b3428}.code{font:700 20px ui-monospace,monospace;letter-spacing:1px;text-align:center;color:#173f36}.hint{font-size:13px}@media(max-width:720px){.auth-shell{display:block;min-height:0}.auth-art{display:none}.box{padding:34px 25px}.box h1{font-size:30px}}`;
+function authPage(title,intro,body){return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · 拾字</title><style>${pageStyle}</style></head><body><main class="auth-shell"><section class="auth-art"><div class="auth-brand">拾字<small>CURIOUS NOTEBOOK</small></div><img src="/assets/curious-notebook-hero.png" alt="盆栽與學習筆記本"><p class="auth-note">SMALL WORDS · A BIGGER YOU</p></section><section class="box"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(intro)}</p>${body}</section></main></body></html>`;}
+function field(name,label,type='text',autocomplete=''){return `<label for="${name}">${label}</label><input id="${name}" name="${name}" type="${type}"${autocomplete?` autocomplete="${autocomplete}"`:''} required>`;}
+function loginPage(message=''){return authPage('登入拾字','登入後繼續照顧你的英文小花園。',`${message?`<p class="message error">${escapeHtml(message)}</p>`:''}<form method="post" action="/login">${field('username','帳號','text','username')}${field('password','密碼','password','current-password')}<button>登入</button></form><nav class="links"><a href="/register">新增帳號</a><a href="/recover">找回帳號</a></nav>`);}
+function registerPage(message=''){return authPage('新增帳號','建立自己的單字本；每個帳號的學習資料會分開保存。',`${message?`<p class="message error">${escapeHtml(message)}</p>`:''}<form method="post" action="/register">${field('username','帳號（3–30 個英文字母、數字或 . _ -）','text','username')}${field('email','找回帳號用的電子信箱','email','email')}${field('password','密碼（至少 10 個字元）','password','new-password')}${field('confirm','再輸入一次密碼','password','new-password')}<button>建立帳號</button></form><nav class="links"><a href="/login">回到登入</a></nav>`);}
+function recoverPage(message='',error=false){return authPage('找回帳號','輸入註冊信箱和復原碼，可查看帳號並設定新密碼。',`${message?`<p class="message${error?' error':''}">${escapeHtml(message)}</p>`:''}<form method="post" action="/recover">${field('identity','帳號或註冊信箱','text','username')}${field('recovery','復原碼','text','one-time-code')}${field('password','設定新密碼（至少 10 個字元）','password','new-password')}${field('confirm','再輸入一次新密碼','password','new-password')}<button>找回並重設密碼</button></form><p class="hint">新帳號的復原碼只在建立後顯示一次。最初的管理帳號可使用目前密碼作為復原碼。</p><nav class="links"><a href="/login">回到登入</a><a href="/register">新增帳號</a></nav>`);}
+function sendHtml(res,status,html,headers={}){res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",...headers});res.end(html);}
+async function formBody(req){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>8192)throw Error('送出的資料過大。');}return new URLSearchParams(raw);}
 const server=http.createServer(async(req,res)=>{
  function send(status,obj){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(obj));}
  try {
@@ -125,12 +153,41 @@ const server=http.createServer(async(req,res)=>{
   if(u.pathname==='/health'){res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});return res.end('ok');}
   if(!cloudMode&&!['127.0.0.1:'+port,'localhost:'+port].includes(req.headers.host)) return send(403,{error:'僅限本機使用'});
   if(publicAssets[u.pathname]&&req.method==='GET'){const [file,type]=publicAssets[u.pathname];res.writeHead(200,{'Content-Type':type,'Cache-Control':'public, max-age=604800, immutable','X-Content-Type-Options':'nosniff'});return res.end(fs.readFileSync(path.join(root,file)));}
-  if(['/login','/register','/recover','/logout'].includes(u.pathname)){res.writeHead(303,{Location:'/app/','Cache-Control':'no-store'});return res.end();}
+  if(u.pathname==='/login'&&req.method==='GET')return sendHtml(res,200,loginPage());
+  if(u.pathname==='/login'&&req.method==='POST'){
+   const form=await formBody(req),account=authData().users[normalizeUsername(form.get('username'))];
+   if(account&&verifySecret(form.get('password')||'',account.password)){res.writeHead(303,{Location:'/app/','Set-Cookie':sessionCookie(account),'Cache-Control':'no-store'});return res.end();}
+   return sendHtml(res,401,loginPage('帳號或密碼不正確，請再試一次。'));
+  }
+  if(u.pathname==='/register'&&req.method==='GET')return sendHtml(res,200,registerPage());
+  if(u.pathname==='/register'&&req.method==='POST'){
+   const form=await formBody(req),username=String(form.get('username')||'').trim(),key=normalizeUsername(username),email=normalizeEmail(form.get('email')),password=String(form.get('password')||''),confirm=String(form.get('confirm')||'');
+   let error='';if(!/^[a-zA-Z0-9._-]{3,30}$/.test(username))error='帳號格式不正確。';else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))error='請輸入有效的電子信箱。';else if(password.length<10)error='密碼至少需要 10 個字元。';else if(password!==confirm)error='兩次輸入的密碼不同。';
+   const auth=authData();if(auth.users[key])error='這個帳號已經有人使用。';
+   if(error)return sendHtml(res,400,registerPage(error));
+   const recovery=crypto.randomBytes(9).toString('base64url').toUpperCase(),id=crypto.randomUUID();
+   auth.users[key]={id,username,email,password:hashSecret(password),recovery:hashSecret(recovery),createdAt:new Date().toISOString()};
+   await saveAuth(auth);await write('words',emptyState(),id);await write('settings',{},id);
+   const done=authPage('帳號建立完成','請先保存這組復原碼；遺失密碼時會用到。',`<p class="code">${escapeHtml(recovery)}</p><p class="hint">為保護帳號，之後不會再次顯示這組復原碼。</p><a class="primary" href="/app/">進入我的單字本</a>`);
+   return sendHtml(res,201,done,{'Set-Cookie':sessionCookie(auth.users[key])});
+  }
+  if(u.pathname==='/recover'&&req.method==='GET')return sendHtml(res,200,recoverPage());
+  if(u.pathname==='/recover'&&req.method==='POST'){
+   const form=await formBody(req),identity=String(form.get('identity')||'').trim(),email=normalizeEmail(identity),username=normalizeUsername(identity),recovery=String(form.get('recovery')||'').trim(),password=String(form.get('password')||''),confirm=String(form.get('confirm')||'');
+   const auth=authData(),entry=Object.entries(auth.users).find(([key,user])=>(key===username||user.email===email)&&(verifySecret(recovery,user.recovery)||verifySecret(recovery.toUpperCase(),user.recovery)));
+   let error='';if(!entry)error='帳號、信箱或復原碼不正確。';else if(password.length<10)error='新密碼至少需要 10 個字元。';else if(password!==confirm)error='兩次輸入的新密碼不同。';
+   if(error)return sendHtml(res,400,recoverPage(error,true));
+   const [key,account]=entry;account.password=hashSecret(password);account.passwordChangedAt=new Date().toISOString();auth.users[key]=account;await saveAuth(auth);
+   return sendHtml(res,200,authPage('帳號已找回','密碼已重新設定。',`<p class="message">你的帳號是：<strong>${escapeHtml(account.username)}</strong></p><a class="primary" href="/login">使用新密碼登入</a>`),{'Set-Cookie':'wg_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
+  }
+  if(u.pathname==='/logout'){res.writeHead(303,{Location:'/login','Set-Cookie':'wg_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});return res.end();}
+  const account=accountFromRequest(req);
+  if(!account){if(req.method==='GET'&&!u.pathname.startsWith('/api/')){res.writeHead(303,{Location:'/login','Cache-Control':'no-store'});return res.end();}return send(401,{error:'請先登入拾字。'});}
   if(publicFiles[u.pathname]&&req.method==='GET'){let content=fs.readFileSync(path.join(root,publicFiles[u.pathname]),'utf8');if(publicFiles[u.pathname]==='index.html')content=content.replace('__TOKEN__',token);res.writeHead(200,{'Content-Type':u.pathname.endsWith('.js')?'text/javascript; charset=utf-8':u.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-store, max-age=0','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"});return res.end(content);}
   if(!u.pathname.startsWith('/api/'))return send(404,{error:'找不到頁面'});
   if(req.headers['x-app-token']!==token)return send(403,{error:'連線已更新，請重新載入頁面後再試。'});
   let body={};if(req.method==='POST'){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>5e6)return send(413,{error:'資料過大'});}body=JSON.parse(raw||'{}');}
-  const accountId='main',state=read('words',emptyState(),accountId),settings=read('settings',{},accountId);state.trash||=[];
+  const accountId=account.id,state=read('words',emptyState(),accountId),settings=read('settings',{},accountId);state.trash||=[];state.readingDays||=[];
   if(u.pathname==='/api/state'&&req.method==='GET') return send(200,{...state,settings:{mw:!!settings.mw,deepl:!!settings.deepl},storage:cloudMode?'cloud':'local'});
   if(u.pathname==='/api/backup'&&req.method==='POST'){
    const backup={version:1,exportedAt:new Date().toISOString(),cards:state.cards,history:state.history};
@@ -153,7 +210,7 @@ const server=http.createServer(async(req,res)=>{
    const word=normalWord(body.word),meaning=String(body.meaning||'').trim();
    const previous=body.id?state.cards.find(c=>c.id===body.id):null;
    if(body.id&&!previous)throw Error('找不到要修改的單字');
-   const card={...(previous||{id:crypto.randomUUID(),due:Date.now(),interval:0,reviews:0}),word,meaning,primaryMeaning:String(body.primaryMeaning||''),example:String(body.example||'').trim(),note:String(body.note||'').trim(),source:String(body.source||'自行記錄'),sourceUrl:String(body.sourceUrl||''),dictionaryNotes:String(body.dictionaryNotes||''),phonetic:String(body.phonetic||'')};
+   const card={...(previous||{id:crypto.randomUUID(),due:Date.now(),interval:0,reviews:0,createdAt:new Date().toISOString()}),word,meaning,primaryMeaning:String(body.primaryMeaning||''),example:String(body.example||'').trim(),note:String(body.note||'').trim(),source:String(body.source||'自行記錄'),sourceUrl:String(body.sourceUrl||''),dictionaryNotes:String(body.dictionaryNotes||''),phonetic:String(body.phonetic||'')};
    if(!validCard(card))throw Error('單字或解釋格式不正確，請確認長度與內容。');
    if(state.cards.some(c=>c.id!==card.id&&c.word===word))throw Error('這個單字已收集，請到單字本編輯。');
    if(previous&&previous.word!==word){card.due=Date.now();card.interval=0;card.reviews=0;delete card.lastReview;delete card.lastRating;}
@@ -170,12 +227,17 @@ const server=http.createServer(async(req,res)=>{
    const {next,added,historyAdded}=importBackup(state,body);await write(cloudMode?'before-import':'before-import-'+Date.now(),state,accountId);await write('words',next,accountId);return send(200,{added,historyAdded});
   }
   if(u.pathname==='/api/news'&&req.method==='GET')return send(200,await news(settings,accountId));
+  if(u.pathname==='/api/reading/complete'&&req.method==='POST'){
+   if(!state.readingDays.includes(day()))state.readingDays.push(day());
+   await write('words',state,accountId);return send(200,{day:day(),complete:true});
+  }
   if(u.pathname==='/api/news/translate'&&req.method==='POST'){const a=read('news',null,accountId);if(!a)throw Error('請先載入文章。');if(!a.zh){const t=await translateReading([a.title,a.text],settings);a.zhTitle=t.values[0];a.zh=t.values[1];a.translationProvider=t.provider;delete a.translationError;await write('news',a,accountId);}return send(200,a);}
   return send(404,{error:'找不到功能'});
  }catch(e){send(400,{error:e.message||'操作失敗，請稍後再試。'});}
 });
 async function start(){
  await loadCloud();
+ if(appPassword){const auth=authData(),key=normalizeUsername(appUsername);if(!auth.users[key]){auth.users[key]={id:'main',username:appUsername,email:'',password:hashSecret(appPassword),recovery:hashSecret(appPassword),createdAt:new Date().toISOString(),legacy:true};await saveAuth(auth);}}
  const legacy=read('words',emptyState());legacy.trash||=[];const consolidated=collapseWords(legacy);if(consolidated.cards.length!==legacy.cards.length){await write('before-one-word-migration',legacy);await write('words',consolidated);}
  server.listen(port,bindHost,()=>console.log('Word Garden listening on '+bindHost+':'+port+(cloudMode?' with cloud storage':' with local storage')));
 }
