@@ -10,8 +10,8 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
  assert.equal((await fetch(base+'/api/state')).status,403);
  assert.equal((await fetch(base+'/data/settings.json')).status,404);
  const lookup=await api('lookup?word=helpful');assert.ok(lookup.data.senses.length>0);
- const first=await api('save',{word:'bank',meaning:'銀行',example:'I went to the bank.'});assert.equal(first.status,200);assert.ok(Number.isFinite(Date.parse(first.data.createdAt)));
- const readingDone=await api('reading/complete',{});assert.equal(readingDone.status,200);assert.ok((await api('state')).data.readingDays.includes(readingDone.data.day));
+ const first=await api('save',{word:'bank',meaning:'銀行',example:'I went to the bank.',exampleZh:'我去了銀行。',collocations:'central bank'});assert.equal(first.status,200);assert.equal(first.data.exampleZh,'我去了銀行。');assert.equal(first.data.collocations,'central bank');
+ assert.ok(Number.isFinite(first.data.createdAt));
  assert.equal((await api('save',{word:'bank',meaning:'銀行'})).status,400);
  assert.equal((await api('save',{word:' BANK ',meaning:'河岸'})).status,400);
  const reviewed=await api('review',{id:first.data.id,rating:3});assert.ok(reviewed.data.due>Date.now()+6*86400000);assert.equal(reviewed.data.lastRating,3);assert.ok(Number.isFinite(reviewed.data.lastReview));
@@ -37,6 +37,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
  const renamed=(await api('save',{...edit,word:'duties'})).data;assert.equal(renamed.reviews,0);assert.ok(renamed.due<=Date.now()+1000);
  assert.equal((await api('state')).data.cards.length,6);
  const exported=await api('backup',{});assert.equal(exported.status,200);
+ const reading=await api('reading/complete',{});assert.equal(reading.status,200);assert.ok(reading.data.readingDays.includes(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())));
  assert.equal(path.dirname(exported.data.path),dir);
  const diskBackup=JSON.parse(fs.readFileSync(exported.data.path,'utf8'));
  assert.deepEqual(diskBackup,exported.data.backup);assert.equal(diskBackup.cards.length,6);
